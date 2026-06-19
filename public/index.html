@@ -149,6 +149,15 @@ function buildShell() {
   });
 }
 
+// Geometry cache for different node kinds
+const NODE_GEOS = {
+  meta:      new THREE.IcosahedronGeometry(1, 1),      // 20-face crystal
+  dream:     new THREE.OctahedronGeometry(1, 0),          // 8-face diamond
+  project:   new THREE.BoxGeometry(1, 1, 1),             // cube
+  concept:   new THREE.DodecahedronGeometry(1, 0),        // 12-face
+  default:   new THREE.IcosahedronGeometry(1, 0)          // 20-face
+};
+
 function buildNodes() {
   const rn = {};
   BDATA.nodes.forEach((n,i) => { const r=n.region||'thalamus'; if(!rn[r])rn[r]=[]; rn[r].push({node:n,index:i}); });
@@ -169,15 +178,86 @@ function buildNodes() {
     nx+=(pseudoRandom(seed+10)-.5)*.08;ny+=(pseudoRandom(seed+11)-.5)*.08;nz+=(pseudoRandom(seed+12)-.5)*.08;
     const maxR=2.9;const len=Math.sqrt(nx*nx+ny*ny+nz*nz);const s=len>maxR?maxR/len:1;
     const fx=nx*s,fy=ny*s,fz=nz*s;
-    const bs=node.kind==='meta'?.14:node.kind==='project'?.09:node.kind==='dream'?.12:.1;
-    const mesh=new THREE.Mesh(new THREE.SphereGeometry(bs,20,20),new THREE.MeshPhongMaterial({color,emissive:color,emissiveIntensity:0.4,transparent:true,opacity:0.95,shininess:80,specular:0x444466}));
+
+    // Size based on kind
+    const bs = node.kind==='meta'?.16 : node.kind==='dream'?.14 : node.kind==='project'?.1 : .11;
+
+    // Choose geometry by kind
+    const baseGeo = NODE_GEOS[node.kind] || NODE_GEOS.default;
+
+    // Core node - solid inner
+    const coreMat = new THREE.MeshPhongMaterial({
+      color, emissive: color, emissiveIntensity: 0.5,
+      transparent: true, opacity: 0.95,
+      shininess: 120, specular: 0x6666aa
+    });
+    const mesh = new THREE.Mesh(baseGeo, coreMat);
+    mesh.scale.setScalar(bs);
     mesh.position.set(fx,fy,fz);
-    mesh.userData={node,index:i,baseSize:bs,targetEmissive:0.4,targetOpacity:0.95};
+    mesh.userData = {node, index:i, baseSize:bs, targetEmissive:0.5, targetOpacity:0.95, spinSpeed: 0.3 + pseudoRandom(seed+20) * 0.5};
     brainGroup.add(mesh); nodeMeshes.push(mesh);
-    const glow=new THREE.Mesh(new THREE.SphereGeometry(bs*2.5,12,12),new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.04}));
+
+    // Wireframe shell - slightly larger, same geometry
+    const wireGeo = baseGeo.clone();
+    const wireMat = new THREE.MeshBasicMaterial({
+      color, wireframe: true, transparent: true, opacity: 0.15
+    });
+    const wire = new THREE.Mesh(wireGeo, wireMat);
+    wire.scale.setScalar(bs * 1.4);
+    wire.position.set(fx,fy,fz);
+    wire.userData = {isWireframe: true, parentNode: i};
+    brainGroup.add(wire);
+
+    // Outer glow shell
+    const glow = new THREE.Mesh(
+      new THREE.SphereGeometry(bs*3, 12, 12),
+      new THREE.MeshBasicMaterial({color, transparent:true, opacity:0.03})
+    );
     glow.position.copy(mesh.position); brainGroup.add(glow); glowSprites.push(glow);
-    nodes3D.push({node,mesh,glow,pos:[fx,fy,fz]});
+
+    // Pulsing ring for meta/dream nodes
+    if(node.kind==='meta' || node.kind==='dream') {
+      const ringGeo = new THREE.TorusGeometry(bs*1.8, 0.008, 8, 48);
+      const ringMat = new THREE.MeshBasicMaterial({color, transparent:true, opacity:0.25});
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.position.set(fx,fy,fz);
+      ring.rotation.x = Math.PI/2 + pseudoRandom(seed+30)*0.5;
+      ring.userData = {isRing: true, ringPhase: pseudoRandom(seed+31)*Math.PI*2};
+      brainGroup.add(ring);
+    }
+
+    // 3D text label sprite
+    const label = node.id.split('/').pop();
+    const sprite = makeTextSprite(label, color);
+    sprite.position.set(fx, fy + bs*1.8 + 0.08, fz);
+    sprite.scale.setScalar(0.4);
+    sprite.userData = {isLabel: true, parentNode: i};
+    brainGroup.add(sprite);
+
+    nodes3D.push({node, mesh, glow, wire, pos:[fx,fy,fz]});
   });
+}
+
+// Create a 3D text sprite from canvas
+function makeTextSprite(text, color) {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = 256; canvas.height = 64;
+  ctx.clearRect(0,0,256,64);
+  const hex = '#' + color.toString(16).padStart(6,'0');
+  ctx.font = '600 22px JetBrains Mono, monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  // Glow
+  ctx.shadowColor = hex; ctx.shadowBlur = 12;
+  ctx.fillStyle = hex; ctx.fillText(text, 128, 32);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#e0e0f0'; ctx.fillText(text, 128, 32);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.minFilter = THREE.LinearFilter;
+  const mat = new THREE.SpriteMaterial({map:texture, transparent:true, opacity:0.85, depthWrite:false});
+  return new THREE.Sprite(mat);
 }
 
 function buildEdges() {
@@ -186,11 +266,31 @@ function buildEdges() {
     const si=nm[e.s],ti=nm[e.t]; if(si===undefined||ti===undefined)return;
     const s=nodes3D[si].pos,t=nodes3D[ti].pos;
     const sc=REGIONS[BDATA.nodes[si].region]?.color||0x818cf8;
+    const tc=REGIONS[BDATA.nodes[ti].region]?.color||0x818cf8;
+    // Midpoint with upward arc
     const mid=[(s[0]+t[0])/2,(s[1]+t[1])/2+.2,(s[2]+t[2])/2];
     const curve=new THREE.QuadraticBezierCurve3(new THREE.Vector3(...s),new THREE.Vector3(...mid),new THREE.Vector3(...t));
-    const geo=new THREE.BufferGeometry().setFromPoints(curve.getPoints(24));
-    const line=new THREE.Line(geo,new THREE.LineBasicMaterial({color:sc,transparent:true,opacity:0.04}));
-    brainGroup.add(line); edges3D.push({line,si,ti});
+    const pts=curve.getPoints(32);
+    // Gradient line via vertex colors
+    const geo=new THREE.BufferGeometry().setFromPoints(pts);
+    const colors=new Float32Array(pts.length*3);
+    const sc2=new THREE.Color(sc),tc2=new THREE.Color(tc);
+    for(let j=0;j<pts.length;j++){
+      const f=j/(pts.length-1);
+      const c=sc2.clone().lerp(tc2,f);
+      colors[j*3]=c.r;colors[j*3+1]=c.g;colors[j*3+2]=c.b;
+    }
+    geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+    const line=new THREE.Line(geo,new THREE.LineBasicMaterial({vertexColors:true,transparent:true,opacity:0.06,linewidth:1}));
+    brainGroup.add(line);
+    edges3D.push({line,si,ti});
+    // Add tiny sphere at midpoint (synapse dot)
+    const dotGeo=new THREE.SphereGeometry(0.015,6,6);
+    const dotMat=new THREE.MeshBasicMaterial({color:sc,transparent:true,opacity:0.15});
+    const dot=new THREE.Mesh(dotGeo,dotMat);
+    dot.position.set(...mid);
+    dot.userData={isSynapse:true};
+    brainGroup.add(dot);
   });
 }
 
@@ -292,11 +392,48 @@ function onResize(){camera.aspect=innerWidth/innerHeight;camera.updateProjection
 function animate() {
   requestAnimationFrame(animate);
   time+=0.008;controls.update();
+
+  // Animate nodes
   nodeMeshes.forEach((m,i)=>{
+    // Smooth emissive/opacity transitions
     m.material.emissiveIntensity+=(m.userData.targetEmissive-m.material.emissiveIntensity)*.08;
     m.material.opacity+=(m.userData.targetOpacity-m.material.opacity)*.08;
-    m.scale.setScalar(1+Math.sin(time*2.5+i*.7)*.04);
+    // Pulse + slow rotation
+    const pulse=1+Math.sin(time*2.5+i*.7)*.06;
+    m.scale.setScalar(m.userData.baseSize*pulse);
+    m.rotation.y+=m.userData.spinSpeed*0.005;
+    m.rotation.x+=m.userData.spinSpeed*0.003;
   });
+
+  // Animate wireframe shells
+  brainGroup.children.forEach(child => {
+    if(child.userData?.isWireframe) {
+      // Spin wireframes opposite direction
+      child.rotation.y -= 0.003;
+      child.rotation.z += 0.002;
+      // Inherit target opacity from parent node
+      const pi = child.userData.parentNode;
+      if(pi !== undefined && nodeMeshes[pi]) {
+        child.material.opacity = nodeMeshes[pi].material.opacity * 0.15;
+      }
+    }
+    // Pulse rings
+    if(child.userData?.isRing) {
+      const phase = child.userData.ringPhase;
+      child.rotation.z = time*0.3 + phase;
+      child.scale.setScalar(1 + Math.sin(time*1.5 + phase)*.1);
+    }
+    // Face labels to camera
+    if(child.userData?.isLabel) {
+      child.quaternion.copy(camera.quaternion);
+      const pi = child.userData.parentNode;
+      if(pi !== undefined && nodeMeshes[pi]) {
+        child.material.opacity = Math.min(1, nodeMeshes[pi].material.opacity * 0.9);
+      }
+    }
+  });
+
+  // Animate particle system
   if(particleSystem){
     const pos=particleSystem.geometry.attributes.position;
     for(let i=0;i<pos.count;i++)pos.array[i*3+1]+=Math.sin(time+i*.01)*.0003;
