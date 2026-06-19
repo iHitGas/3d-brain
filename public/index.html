@@ -197,18 +197,54 @@ function buildBrain() {
     brainGroup.add(rMesh);
   });
 
-  // Place nodes
+  // Group nodes by region for proper distribution
+  const regionNodes = {};
+  BDATA.nodes.forEach((n, i) => {
+    const r = n.region || 'thalamus';
+    if (!regionNodes[r]) regionNodes[r] = [];
+    regionNodes[r].push({ node: n, index: i });
+  });
+
+  // Place nodes with proper per-region distribution
   BDATA.nodes.forEach((node, i) => {
     const region = REGIONS[node.region] || REGIONS.thalamus;
     const [rx, ry, rz] = region.pos;
     const color = region.color;
+    const regionList = regionNodes[node.region] || [];
+    const regionIndex = regionList.findIndex(rn => rn.index === i);
+    const regionCount = regionList.length;
 
-    // Spread nodes within region using deterministic random
+    // Calculate position within region using fibonacci sphere distribution
+    const [cx, cy, cz] = [rx * 2, ry * 2.5, rz * 2]; // region center
+    const spreadRadius = Math.max(0.6, Math.sqrt(regionCount) * 0.35); // scales with node count
+    let nx, ny, nz;
+
+    if (regionCount <= 1) {
+      // Single node: place at region center
+      nx = cx; ny = cy; nz = cz;
+    } else if (regionCount <= 3) {
+      // Small group: distribute in a small circle around center
+      const angle = (regionIndex / regionCount) * Math.PI * 2;
+      const r = spreadRadius * 0.5;
+      nx = cx + Math.cos(angle) * r;
+      ny = cy + (pseudoRandom(hashCode(node.id) + 7) - 0.5) * 0.3;
+      nz = cz + Math.sin(angle) * r;
+    } else {
+      // Larger group: use fibonacci sphere for even distribution
+      const goldenAngle = Math.PI * (3 - Math.sqrt(5)); // ~2.4 rad
+      const theta = goldenAngle * regionIndex;
+      const phi = Math.acos(1 - 2 * (regionIndex + 0.5) / regionCount);
+      const r = spreadRadius;
+      nx = cx + r * Math.sin(phi) * Math.cos(theta);
+      ny = cy + r * Math.cos(phi);
+      nz = cz + r * Math.sin(phi) * Math.sin(theta);
+    }
+
+    // Add small deterministic jitter for visual variety
     const seed = hashCode(node.id);
-    const spread = 0.8;
-    const nx = rx * 2 + (pseudoRandom(seed) - 0.5) * spread * 2;
-    const ny = ry * 2.5 + (pseudoRandom(seed + 1) - 0.5) * spread * 1.5;
-    const nz = rz * 2 + (pseudoRandom(seed + 2) - 0.5) * spread * 2;
+    nx += (pseudoRandom(seed + 10) - 0.5) * 0.08;
+    ny += (pseudoRandom(seed + 11) - 0.5) * 0.08;
+    nz += (pseudoRandom(seed + 12) - 0.5) * 0.08;
 
     // Clamp to brain sphere
     const maxR = 2.9;
