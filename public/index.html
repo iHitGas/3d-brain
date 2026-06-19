@@ -5,468 +5,309 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>3D Brain Atlas</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#05050a;color:#e5e7eb;font-family:'Inter',system-ui,sans-serif;overflow:hidden;height:100vh}
-canvas{display:block}
-
-/* Header */
-.hdr{position:fixed;top:0;left:0;right:0;padding:14px 24px;z-index:10;pointer-events:none;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(180deg,rgba(5,5,10,.98) 0%,rgba(5,5,10,.5) 60%,transparent)}
-.hdr-l{display:flex;align-items:center;gap:12px}
-.logo{width:28px;height:28px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#a78bfa,#6366f1,#4f46e5);box-shadow:0 0 16px rgba(99,102,241,.4);display:flex;align-items:center;justify-content:center;font-size:14px}
-.title{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
-.title b{color:#a78bfa}
-.hdr-stats{display:flex;gap:16px;align-items:center}
-.stat{font-family:'JetBrains Mono',monospace;text-align:right}
-.stat-v{font-size:16px;font-weight:700;background:linear-gradient(135deg,#818cf8,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.stat-l{font-size:7px;color:#2d3148;text-transform:uppercase;letter-spacing:.1em;margin-top:1px}
-
-/* Region legend */
-.legend{position:fixed;bottom:24px;left:24px;z-index:10;font-family:'JetBrains Mono',monospace;font-size:9px;pointer-events:none}
-.legend-row{display:flex;align-items:center;gap:8px;margin:4px 0;color:#3d4258}
-.legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-
-/* Info panel */
-.panel{position:fixed;right:-420px;top:0;bottom:0;width:400px;background:rgba(5,5,10,.98);border-left:1px solid rgba(99,102,241,.08);z-index:15;transition:right .4s cubic-bezier(.4,0,.2,1);backdrop-filter:blur(40px);padding:40px 28px 28px;overflow-y:auto}
+body{background:#040408;color:#e5e7eb;font-family:'Inter',system-ui,sans-serif;overflow:hidden;height:100vh}
+canvas{display:block;position:fixed;inset:0}
+.hdr{position:fixed;top:0;left:0;right:0;padding:16px 28px;z-index:10;pointer-events:none;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(180deg,rgba(4,4,8,.95),rgba(4,4,8,.5) 60%,transparent)}
+.hdr-l{display:flex;align-items:center;gap:14px}
+.logo{width:36px;height:36px;border-radius:12px;background:conic-gradient(from 45deg,#818cf8,#c084fc,#f472b6,#38bdf8,#34d399,#fbbf24,#818cf8);padding:2px;animation:logoSpin 8s linear infinite}
+@keyframes logoSpin{to{filter:hue-rotate(360deg)}}
+.logo-inner{width:100%;height:100%;border-radius:10px;background:#0a0a12;display:flex;align-items:center;justify-content:center;font-size:18px}
+.title{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;letter-spacing:.1em;text-transform:uppercase}
+.title b{background:linear-gradient(135deg,#818cf8,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.title-sub{font-size:9px;color:#2d3148;font-weight:400;letter-spacing:.15em;margin-top:2px}
+.hdr-stats{display:flex;gap:20px;align-items:center}
+.stat{font-family:'JetBrains Mono',monospace;text-align:center}
+.stat-v{font-size:20px;font-weight:700;line-height:1;background:linear-gradient(135deg,#818cf8,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.stat-l{font-size:7px;color:#2d3148;text-transform:uppercase;letter-spacing:.15em;margin-top:4px}
+.filters{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:6px;padding:8px 12px;border-radius:16px;background:rgba(4,4,8,.85);border:1px solid rgba(99,102,241,.06);backdrop-filter:blur(20px)}
+.filter-btn{font-family:'JetBrains Mono',monospace;font-size:8px;padding:5px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.04);background:rgba(255,255,255,.02);color:#3d4258;cursor:pointer;transition:all .2s;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}
+.filter-btn:hover{background:rgba(255,255,255,.06);color:#9ca3af}
+.filter-btn.active{border-color:rgba(129,140,248,.3);color:#818cf8;background:rgba(129,140,248,.08)}
+.filter-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:4px;vertical-align:middle}
+.panel{position:fixed;right:-440px;top:0;bottom:0;width:420px;background:rgba(6,6,14,.96);border-left:1px solid rgba(99,102,241,.06);z-index:15;transition:right .5s cubic-bezier(.16,1,.3,1);backdrop-filter:blur(40px);padding:48px 32px 32px;overflow-y:auto}
 .panel.open{right:0}
-.panel-close{position:absolute;top:16px;right:16px;color:#3d4258;cursor:pointer;font-size:20px;font-family:'JetBrains Mono',monospace;transition:color .2s}
-.panel-close:hover{color:#818cf8}
-.panel-title{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;background:linear-gradient(135deg,#e5e7eb,#818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.panel-kind{font-family:'JetBrains Mono',monospace;font-size:9px;color:#3d4258;text-transform:uppercase;letter-spacing:.1em;margin-top:8px}
+.panel::-webkit-scrollbar{width:3px}
+.panel::-webkit-scrollbar-thumb{background:rgba(129,140,248,.15);border-radius:3px}
+.panel-close{position:absolute;top:16px;right:20px;width:28px;height:28px;border-radius:8px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02);color:#3d4258;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .2s;font-family:'JetBrains Mono',monospace}
+.panel-close:hover{color:#818cf8;border-color:rgba(129,140,248,.2)}
+.panel-icon{font-size:32px;margin-bottom:8px}
+.panel-title{font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:700;background:linear-gradient(135deg,#f0f0f5,#818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.panel-kind{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:8px;color:#818cf8;text-transform:uppercase;letter-spacing:.12em;margin-top:10px;padding:3px 8px;border-radius:4px;background:rgba(129,140,248,.06);border:1px solid rgba(129,140,248,.1)}
+.panel-region{font-size:11px;color:#3d4258;margin-top:6px}
+.panel-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:20px}
+.panel-metric{padding:12px;border-radius:10px;background:rgba(255,255,255,.015);border:1px solid rgba(255,255,255,.03)}
+.panel-metric-label{font-family:'JetBrains Mono',monospace;font-size:7px;color:#2d3148;text-transform:uppercase;letter-spacing:.12em}
+.panel-metric-value{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600;color:#9ca3af;margin-top:4px}
 .panel-section{margin-top:20px}
-.panel-label{font-family:'JetBrains Mono',monospace;font-size:8px;color:#2d3148;text-transform:uppercase;letter-spacing:.12em;margin-bottom:6px}
-.panel-value{font-family:'JetBrains Mono',monospace;font-size:12px;color:#9ca3af;line-height:1.6}
-.panel-connections{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
-.conn-tag{font-family:'JetBrains Mono',monospace;font-size:9px;padding:3px 8px;border-radius:6px;background:rgba(99,102,241,.06);color:#6366f1;border:1px solid rgba(99,102,241,.08)}
-
-/* Controls hint */
-.hint{position:fixed;bottom:24px;right:24px;z-index:10;font-family:'JetBrains Mono',monospace;font-size:8px;color:#1e2236;letter-spacing:.05em;text-align:right;pointer-events:none;line-height:1.8}
-
-/* Vignette */
-.vignette{position:fixed;inset:0;pointer-events:none;z-index:4;background:radial-gradient(ellipse at center,transparent 40%,rgba(5,5,10,.8) 100%)}
-
-/* Loading */
-.loader{position:fixed;inset:0;z-index:100;background:#05050a;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .6s,visibility .6s}
-.loader.done{opacity:0;visibility:hidden}
-.loader-text{font-family:'JetBrains Mono',monospace;font-size:10px;color:#2d3148;letter-spacing:.2em;text-transform:uppercase;margin-top:16px}
+.panel-label{font-family:'JetBrains Mono',monospace;font-size:7px;color:#2d3148;text-transform:uppercase;letter-spacing:.15em;margin-bottom:8px}
+.panel-connections{display:flex;flex-wrap:wrap;gap:5px}
+.conn-tag{font-family:'JetBrains Mono',monospace;font-size:9px;padding:4px 10px;border-radius:8px;background:rgba(99,102,241,.04);color:#6366f1;border:1px solid rgba(99,102,241,.06);cursor:pointer;transition:all .15s}
+.conn-tag:hover{background:rgba(99,102,241,.1);border-color:rgba(99,102,241,.15);color:#818cf8}
+.dream-badge{display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:10px;padding:6px 12px;border-radius:8px;background:rgba(192,132,252,.06);border:1px solid rgba(192,132,252,.1);color:#c084fc;margin-top:16px}
+.vignette{position:fixed;inset:0;pointer-events:none;z-index:4;background:radial-gradient(ellipse at center,transparent 30%,rgba(4,4,8,.85) 100%)}
+.scanline{position:fixed;inset:0;pointer-events:none;z-index:5;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.015) 3px,rgba(0,0,0,.015) 4px);opacity:.5}
+.tooltip{position:fixed;z-index:20;pointer-events:none;font-family:'JetBrains Mono',monospace;font-size:10px;color:#c0c4d0;padding:6px 12px;border-radius:8px;background:rgba(6,6,14,.9);border:1px solid rgba(129,140,248,.1);backdrop-filter:blur(10px);white-space:nowrap;opacity:0;transition:opacity .15s}
+.tooltip.visible{opacity:1}
+.tooltip-region{font-size:7px;color:#3d4258;text-transform:uppercase;letter-spacing:.1em;margin-top:2px}
+.loader{position:fixed;inset:0;z-index:100;background:#040408;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .8s ease,visibility .8s}
+.loader.done{opacity:0;visibility:hidden;pointer-events:none}
+.loader-orb{width:60px;height:60px;border-radius:50%;background:conic-gradient(from 0deg,#818cf8,#c084fc,#f472b6,#818cf8);animation:orbSpin 2s linear infinite;filter:blur(1px)}
+.loader-orb::after{content:'';position:absolute;inset:4px;border-radius:50%;background:#040408}
+@keyframes orbSpin{to{transform:rotate(360deg)}}
+.loader-text{font-family:'JetBrains Mono',monospace;font-size:9px;color:#2d3148;letter-spacing:.3em;text-transform:uppercase;margin-top:20px}
+.loader-bar{width:120px;height:2px;border-radius:1px;background:rgba(129,140,248,.08);margin-top:12px;overflow:hidden}
+.loader-bar::after{content:'';display:block;width:40%;height:100%;background:linear-gradient(90deg,transparent,#818cf8,transparent);animation:loadSlide 1.5s ease infinite}
+@keyframes loadSlide{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}
 </style>
 </head>
 <body>
-<div class="loader" id="loader"><div class="logo" style="width:40px;height:40px;font-size:20px">🧠</div><div class="loader-text">Loading Brain Atlas</div></div>
+<div class="loader" id="loader"><div class="loader-orb"></div><div class="loader-text">Initializing Brain Atlas</div><div class="loader-bar"></div></div>
 <div class="vignette"></div>
-
+<div class="scanline"></div>
+<div class="tooltip" id="tooltip"><div id="tooltipName"></div><div class="tooltip-region" id="tooltipRegion"></div></div>
 <div class="hdr">
-  <div class="hdr-l"><div class="logo">🧠</div><div class="title"><b>Claudia</b> 3D Brain Atlas</div></div>
+  <div class="hdr-l"><div class="logo"><div class="logo-inner">🧠</div></div><div><div class="title"><b>Claudia</b> Brain Atlas</div><div class="title-sub">3D Neural Topology</div></div></div>
   <div class="hdr-stats" id="hdrStats"></div>
 </div>
-
-<div class="legend" id="legend"></div>
-<div class="panel" id="panel"><div class="panel-close" onclick="closePanel()">&times;</div><div id="panelContent"></div></div>
-<div class="hint">DRAG to rotate<br>SCROLL to zoom<br>CLICK node for info</div>
+<div class="filters" id="filters"></div>
+<div class="panel" id="panel"><button class="panel-close" onclick="closePanel()">✕</button><div id="panelContent"></div></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script>
-// ── Brain Region Colors & Positions ──
 const REGIONS = {
-  prefrontal:  { color: 0x818cf8, label: 'Prefrontal',   pos: [0, 0.3, 1.2],    desc: 'Identity · Decisions · Concepts' },
-  thalamus:    { color: 0x38bdf8, label: 'Thalamus',     pos: [0, 0.0, 0.0],    desc: 'Routing · Relay · Templates' },
-  hippocampus: { color: 0x34d399, label: 'Hippocampus',  pos: [-0.8, -0.2, -0.5], desc: 'Memory · Indexing' },
-  motor:       { color: 0xf472b6, label: 'Motor Cortex', pos: [0, 0.8, 0.3],    desc: 'Action · Projects' },
-  occipital:   { color: 0xfbbf24, label: 'Occipital',   pos: [0, -0.1, -1.3],  desc: 'Visual · Reference Input' },
-  temporal:    { color: 0xfb923c, label: 'Temporal',     pos: [-1.2, 0, 0.3],   desc: 'Social · People' },
-  cerebellum:  { color: 0x2dd4bf, label: 'Cerebellum',  pos: [0.8, -0.5, -0.8], desc: 'Daily Routines' },
-  limbic:      { color: 0xc084fc, label: 'Limbic',      pos: [0, 0.4, -0.3],   desc: 'Emotions · Dreams' }
+  prefrontal:  { color: 0x818cf8, label: 'Prefrontal',   pos: [0, 0.3, 1.2],    desc: 'Identity, decisions, and conceptual reasoning', hex: '#818cf8', emoji: '🎯' },
+  thalamus:    { color: 0x38bdf8, label: 'Thalamus',     pos: [0, 0.0, 0.0],    desc: 'Signal routing, relay, and template patterns', hex: '#38bdf8', emoji: '📡' },
+  hippocampus: { color: 0x34d399, label: 'Hippocampus',  pos: [-0.8, -0.2, -0.5], desc: 'Memory formation and spatial indexing', hex: '#34d399', emoji: '📇' },
+  motor:       { color: 0xf472b6, label: 'Motor Cortex', pos: [0, 0.8, 0.3],    desc: 'Action execution and active projects', hex: '#f472b6', emoji: '⚡' },
+  occipital:   { color: 0xfbbf24, label: 'Occipital',   pos: [0, -0.1, -1.3],  desc: 'Visual processing and reference input', hex: '#fbbf24', emoji: '👁' },
+  temporal:    { color: 0xfb923c, label: 'Temporal',     pos: [-1.2, 0, 0.3],   desc: 'Social cognition and people', hex: '#fb923c', emoji: '👥' },
+  cerebellum:  { color: 0x2dd4bf, label: 'Cerebellum',  pos: [0.8, -0.5, -0.8], desc: 'Routine patterns and daily scheduling', hex: '#2dd4bf', emoji: '🔄' },
+  limbic:      { color: 0xc084fc, label: 'Limbic',      pos: [0, 0.4, -0.3],   desc: 'Emotional processing and dream synthesis', hex: '#c084fc', emoji: '🌙' }
 };
 
-// ── Fetch brain data ──
-let BDATA = null;
-let nodes3D = [];
-let edges3D = [];
+let BDATA = null, nodes3D = [], edges3D = [];
+let scene, camera, renderer, controls, raycaster, mouse;
+let brainGroup, particleSystem;
+let nodeMeshes = [], glowSprites = [];
+let hoveredNode = null, selectedNode = null, activeFilter = null, time = 0;
 
 async function loadData() {
-  try {
-    const r = await fetch('/api/data');
-    BDATA = await r.json();
-  } catch {
-    // Fallback inline data
-    BDATA = {nodes:[],edges:[]};
-  }
+  try { const r = await fetch('/api/data'); BDATA = await r.json(); } catch { BDATA = {nodes:[],edges:[]}; }
   buildScene();
 }
 
-// ── Three.js Setup ──
-let scene, camera, renderer, controls;
-let raycaster, mouse;
-let brainGroup;
-let nodeMeshes = [];
-let hoveredNode = null;
-let selectedNode = null;
-
 function buildScene() {
   scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0x05050a, 0.06);
-
-  camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
-  camera.position.set(0, 2, 8);
-
+  camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 1000);
+  camera.position.set(0, 1.5, 9);
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.2;
+  renderer.toneMappingExposure = 1.1;
   document.body.appendChild(renderer.domElement);
-
   controls = new THREE.OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.05;
-  controls.maxDistance = 20;
-  controls.minDistance = 2;
-  controls.autoRotate = true;
-  controls.autoRotateSpeed = 0.3;
-
+  controls.enableDamping = true; controls.dampingFactor = 0.04;
+  controls.maxDistance = 18; controls.minDistance = 3;
+  controls.autoRotate = true; controls.autoRotateSpeed = 0.25;
   raycaster = new THREE.Raycaster();
   mouse = new THREE.Vector2(-999, -999);
 
-  // Lighting
-  const ambLight = new THREE.AmbientLight(0x404060, 0.5);
-  scene.add(ambLight);
-  const dirLight = new THREE.DirectionalLight(0x818cf8, 0.8);
-  dirLight.position.set(5, 10, 5);
-  scene.add(dirLight);
-  const pointLight = new THREE.PointLight(0xc084fc, 0.6, 20);
-  pointLight.position.set(-3, 3, 3);
-  scene.add(pointLight);
-  const pointLight2 = new THREE.PointLight(0x818cf8, 0.4, 20);
-  pointLight2.position.set(3, -2, -3);
-  scene.add(pointLight2);
+  scene.add(new THREE.AmbientLight(0x1a1a3e, 0.4));
+  const kl = new THREE.DirectionalLight(0x818cf8, 0.6); kl.position.set(4,8,6); scene.add(kl);
+  const fl = new THREE.DirectionalLight(0xc084fc, 0.3); fl.position.set(-6,2,-4); scene.add(fl);
+  const rl = new THREE.PointLight(0xf472b6, 0.4, 25); rl.position.set(0,-4,5); scene.add(rl);
+  Object.values(REGIONS).forEach(reg => {
+    const [x,y,z] = reg.pos;
+    const pl = new THREE.PointLight(reg.color, 0.15, 8);
+    pl.position.set(x*2, y*2.5, z*2); scene.add(pl);
+  });
 
-  brainGroup = new THREE.Group();
-  scene.add(brainGroup);
-
-  // Build brain regions and nodes
-  buildBrain();
-  buildEdges();
-  buildBackground();
-
-  // Stats
-  const hdrStats = document.getElementById('hdrStats');
-  hdrStats.innerHTML = `
-    <div class="stat"><div class="stat-v">${BDATA.nodes.length}</div><div class="stat-l">Nodes</div></div>
-    <div class="stat"><div class="stat-v">${BDATA.edges.length}</div><div class="stat-l">Links</div></div>
-  `;
-
-  // Legend
-  buildLegend();
-
-  // Hide loader
-  setTimeout(() => document.getElementById('loader').classList.add('done'), 500);
-
-  // Events
-  window.addEventListener('resize', onResize);
-  window.addEventListener('mousemove', onMouseMove);
-  window.addEventListener('click', onClick);
-
+  brainGroup = new THREE.Group(); scene.add(brainGroup);
+  buildShell(); buildNodes(); buildEdges(); buildParticles(); buildStars(); buildUI();
+  addEventListener('resize', onResize);
+  addEventListener('mousemove', onMouseMove);
+  addEventListener('click', onClick);
+  setTimeout(() => document.getElementById('loader').classList.add('done'), 600);
   animate();
 }
 
-function buildBrain() {
-  // Create transparent brain shell (two hemispheres)
-  const shellGeo = new THREE.SphereGeometry(3.2, 64, 64, 0, Math.PI * 2, 0, Math.PI * 0.85);
-  const shellMat = new THREE.MeshPhongMaterial({
-    color: 0x1a1a2e, transparent: true, opacity: 0.04,
-    wireframe: true, wireframeLinewidth: 0.5
-  });
-  const shell = new THREE.Mesh(shellGeo, shellMat);
-  brainGroup.add(shell);
-
-  // Inner glow
-  const glowGeo = new THREE.SphereGeometry(2.8, 32, 32);
-  const glowMat = new THREE.MeshBasicMaterial({ color: 0x6366f1, transparent: true, opacity: 0.015 });
-  const glow = new THREE.Mesh(glowGeo, glowMat);
-  brainGroup.add(glow);
-
-  // Region center markers (subtle glowing spheres)
+function buildShell() {
+  const s1 = new THREE.Mesh(new THREE.IcosahedronGeometry(3.4,3), new THREE.MeshBasicMaterial({color:0x818cf8,wireframe:true,transparent:true,opacity:0.015}));
+  brainGroup.add(s1);
+  const s2 = new THREE.Mesh(new THREE.IcosahedronGeometry(3.0,2), new THREE.MeshBasicMaterial({color:0xc084fc,wireframe:true,transparent:true,opacity:0.008}));
+  brainGroup.add(s2);
+  const core = new THREE.Mesh(new THREE.SphereGeometry(0.3,16,16), new THREE.MeshBasicMaterial({color:0x818cf8,transparent:true,opacity:0.08}));
+  brainGroup.add(core);
   Object.entries(REGIONS).forEach(([id, reg]) => {
-    const [x, y, z] = reg.pos;
-    // Region anchor - subtle glow
-    const rGeo = new THREE.SphereGeometry(0.15, 16, 16);
-    const rMat = new THREE.MeshBasicMaterial({ color: reg.color, transparent: true, opacity: 0.15 });
-    const rMesh = new THREE.Mesh(rGeo, rMat);
-    rMesh.position.set(x * 2, y * 2.5, z * 2);
-    brainGroup.add(rMesh);
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.08,8,8), new THREE.MeshBasicMaterial({color:reg.color,transparent:true,opacity:0.2}));
+    m.position.set(...reg.pos.map(v=>v*2)); m.position.y = reg.pos[1]*2.5;
+    brainGroup.add(m);
   });
+}
 
-  // Group nodes by region for proper distribution
-  const regionNodes = {};
-  BDATA.nodes.forEach((n, i) => {
-    const r = n.region || 'thalamus';
-    if (!regionNodes[r]) regionNodes[r] = [];
-    regionNodes[r].push({ node: n, index: i });
-  });
-
-  // Place nodes with proper per-region distribution
-  BDATA.nodes.forEach((node, i) => {
-    const region = REGIONS[node.region] || REGIONS.thalamus;
-    const [rx, ry, rz] = region.pos;
+function buildNodes() {
+  const rn = {};
+  BDATA.nodes.forEach((n,i) => { const r=n.region||'thalamus'; if(!rn[r])rn[r]=[]; rn[r].push({node:n,index:i}); });
+  BDATA.nodes.forEach((node,i) => {
+    const region = REGIONS[node.region]||REGIONS.thalamus;
+    const [rx,ry,rz] = region.pos;
     const color = region.color;
-    const regionList = regionNodes[node.region] || [];
-    const regionIndex = regionList.findIndex(rn => rn.index === i);
-    const regionCount = regionList.length;
-
-    // Calculate position within region using fibonacci sphere distribution
-    const [cx, cy, cz] = [rx * 2, ry * 2.5, rz * 2]; // region center
-    const spreadRadius = Math.max(0.6, Math.sqrt(regionCount) * 0.35); // scales with node count
-    let nx, ny, nz;
-
-    if (regionCount <= 1) {
-      // Single node: place at region center
-      nx = cx; ny = cy; nz = cz;
-    } else if (regionCount <= 3) {
-      // Small group: distribute in a small circle around center
-      const angle = (regionIndex / regionCount) * Math.PI * 2;
-      const r = spreadRadius * 0.5;
-      nx = cx + Math.cos(angle) * r;
-      ny = cy + (pseudoRandom(hashCode(node.id) + 7) - 0.5) * 0.3;
-      nz = cz + Math.sin(angle) * r;
-    } else {
-      // Larger group: use fibonacci sphere for even distribution
-      const goldenAngle = Math.PI * (3 - Math.sqrt(5)); // ~2.4 rad
-      const theta = goldenAngle * regionIndex;
-      const phi = Math.acos(1 - 2 * (regionIndex + 0.5) / regionCount);
-      const r = spreadRadius;
-      nx = cx + r * Math.sin(phi) * Math.cos(theta);
-      ny = cy + r * Math.cos(phi);
-      nz = cz + r * Math.sin(phi) * Math.sin(theta);
-    }
-
-    // Add small deterministic jitter for visual variety
-    const seed = hashCode(node.id);
-    nx += (pseudoRandom(seed + 10) - 0.5) * 0.08;
-    ny += (pseudoRandom(seed + 11) - 0.5) * 0.08;
-    nz += (pseudoRandom(seed + 12) - 0.5) * 0.08;
-
-    // Clamp to brain sphere
-    const maxR = 2.9;
-    const len = Math.sqrt(nx*nx + ny*ny + nz*nz);
-    const scale = len > maxR ? maxR / len : 1;
-    const fx = nx * scale, fy = ny * scale, fz = nz * scale;
-
-    // Node sphere
-    const size = node.kind === 'meta' ? 0.12 : node.kind === 'project' ? 0.08 : 0.1;
-    const geo = new THREE.SphereGeometry(size, 16, 16);
-    const mat = new THREE.MeshPhongMaterial({
-      color: color,
-      emissive: color,
-      emissiveIntensity: 0.3,
-      transparent: true,
-      opacity: 0.9
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(fx, fy, fz);
-    mesh.userData = { node, index: i };
-    brainGroup.add(mesh);
-    nodeMeshes.push(mesh);
-
-    // Glow ring
-    const ringGeo = new THREE.RingGeometry(size + 0.02, size + 0.04, 32);
-    const ringMat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.2, side: THREE.DoubleSide });
-    const ring = new THREE.Mesh(ringGeo, ringMat);
-    ring.position.copy(mesh.position);
-    ring.lookAt(camera.position);
-    ring.userData = { isRing: true };
-    brainGroup.add(ring);
-
-    nodes3D.push({ node, mesh, ring, pos: [fx, fy, fz] });
+    const rl = rn[node.region]||[];
+    const ri = rl.findIndex(r=>r.index===i);
+    const rc = rl.length;
+    const [cx,cy,cz] = [rx*2,ry*2.5,rz*2];
+    const sr = Math.max(0.6, Math.sqrt(rc)*0.38);
+    let nx,ny,nz;
+    if(rc<=1){nx=cx;ny=cy;nz=cz}
+    else if(rc<=3){const a=(ri/rc)*Math.PI*2;nx=cx+Math.cos(a)*sr*.5;ny=cy+(pseudoRandom(hashCode(node.id)+7)-.5)*.3;nz=cz+Math.sin(a)*sr*.5}
+    else{const g=Math.PI*(3-Math.sqrt(5));const t=g*ri;const p=Math.acos(1-2*(ri+.5)/rc);nx=cx+sr*Math.sin(p)*Math.cos(t);ny=cy+sr*Math.cos(p);nz=cz+sr*Math.sin(p)*Math.sin(t)}
+    const seed=hashCode(node.id);
+    nx+=(pseudoRandom(seed+10)-.5)*.08;ny+=(pseudoRandom(seed+11)-.5)*.08;nz+=(pseudoRandom(seed+12)-.5)*.08;
+    const maxR=2.9;const len=Math.sqrt(nx*nx+ny*ny+nz*nz);const s=len>maxR?maxR/len:1;
+    const fx=nx*s,fy=ny*s,fz=nz*s;
+    const bs=node.kind==='meta'?.14:node.kind==='project'?.09:node.kind==='dream'?.12:.1;
+    const mesh=new THREE.Mesh(new THREE.SphereGeometry(bs,20,20),new THREE.MeshPhongMaterial({color,emissive:color,emissiveIntensity:0.4,transparent:true,opacity:0.95,shininess:80,specular:0x444466}));
+    mesh.position.set(fx,fy,fz);
+    mesh.userData={node,index:i,baseSize:bs,targetEmissive:0.4,targetOpacity:0.95};
+    brainGroup.add(mesh); nodeMeshes.push(mesh);
+    const glow=new THREE.Mesh(new THREE.SphereGeometry(bs*2.5,12,12),new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.04}));
+    glow.position.copy(mesh.position); brainGroup.add(glow); glowSprites.push(glow);
+    nodes3D.push({node,mesh,glow,pos:[fx,fy,fz]});
   });
 }
 
 function buildEdges() {
-  const nodeMap = {};
-  nodes3D.forEach((n, i) => { nodeMap[n.node.id] = i; });
-
-  BDATA.edges.forEach(edge => {
-    const si = nodeMap[edge.s];
-    const ti = nodeMap[edge.t];
-    if (si === undefined || ti === undefined) return;
-
-    const s = nodes3D[si].pos;
-    const t = nodes3D[ti].pos;
-    const sColor = REGIONS[BDATA.nodes[si].region]?.color || 0x818cf8;
-    const tColor = REGIONS[BDATA.nodes[ti].region]?.color || 0x818cf8;
-
-    // Curved line between nodes
-    const mid = [(s[0]+t[0])/2, (s[1]+t[1])/2 + 0.15, (s[2]+t[2])/2];
-    const curve = new THREE.QuadraticBezierCurve3(
-      new THREE.Vector3(...s),
-      new THREE.Vector3(mid[0], mid[1], mid[2]),
-      new THREE.Vector3(...t)
-    );
-    const points = curve.getPoints(20);
-    const geo = new THREE.BufferGeometry().setFromPoints(points);
-    const mat = new THREE.LineBasicMaterial({ color: sColor, transparent: true, opacity: 0.06 });
-    const line = new THREE.Line(geo, mat);
-    brainGroup.add(line);
-    edges3D.push({ line, si, ti });
+  const nm={}; nodes3D.forEach((n,i)=>nm[n.node.id]=i);
+  BDATA.edges.forEach(e=>{
+    const si=nm[e.s],ti=nm[e.t]; if(si===undefined||ti===undefined)return;
+    const s=nodes3D[si].pos,t=nodes3D[ti].pos;
+    const sc=REGIONS[BDATA.nodes[si].region]?.color||0x818cf8;
+    const mid=[(s[0]+t[0])/2,(s[1]+t[1])/2+.2,(s[2]+t[2])/2];
+    const curve=new THREE.QuadraticBezierCurve3(new THREE.Vector3(...s),new THREE.Vector3(...mid),new THREE.Vector3(...t));
+    const geo=new THREE.BufferGeometry().setFromPoints(curve.getPoints(24));
+    const line=new THREE.Line(geo,new THREE.LineBasicMaterial({color:sc,transparent:true,opacity:0.04}));
+    brainGroup.add(line); edges3D.push({line,si,ti});
   });
 }
 
-function buildBackground() {
-  // Starfield
-  const starsGeo = new THREE.BufferGeometry();
-  const starPositions = [];
-  for (let i = 0; i < 2000; i++) {
-    starPositions.push(
-      (Math.random() - 0.5) * 80,
-      (Math.random() - 0.5) * 80,
-      (Math.random() - 0.5) * 80
-    );
+function buildParticles() {
+  const c=800,p=new Float32Array(c*3),cl=new Float32Array(c*3),rk=Object.keys(REGIONS);
+  for(let i=0;i<c;i++){
+    const r=3+Math.random()*2.5,t=Math.random()*Math.PI*2,phi=Math.acos(2*Math.random()-1);
+    p[i*3]=r*Math.sin(phi)*Math.cos(t);p[i*3+1]=r*Math.cos(phi);p[i*3+2]=r*Math.sin(phi)*Math.sin(t);
+    const rc=REGIONS[rk[Math.floor(Math.random()*rk.length)]].color;const cc=new THREE.Color(rc);
+    cl[i*3]=cc.r;cl[i*3+1]=cc.g;cl[i*3+2]=cc.b;
   }
-  starsGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
-  const starsMat = new THREE.PointsMaterial({ color: 0x3d4258, size: 0.05, transparent: true, opacity: 0.6 });
-  const stars = new THREE.Points(starsGeo, starsMat);
-  scene.add(stars);
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));
+  g.setAttribute('color',new THREE.Float32BufferAttribute(cl,3));
+  particleSystem=new THREE.Points(g,new THREE.PointsMaterial({size:0.04,vertexColors:true,transparent:true,opacity:0.3,blending:THREE.AdditiveBlending,sizeAttenuation:true}));
+  scene.add(particleSystem);
 }
 
-function buildLegend() {
-  const el = document.getElementById('legend');
-  let html = '';
-  Object.entries(REGIONS).forEach(([id, reg]) => {
-    const count = BDATA.nodes.filter(n => n.region === id).length;
-    if (count > 0) {
-      const hex = '#' + reg.color.toString(16).padStart(6, '0');
-      html += `<div class="legend-row"><div class="legend-dot" style="background:${hex}"></div>${reg.label} (${count})</div>`;
-    }
-  });
-  el.innerHTML = html;
+function buildStars() {
+  const c=3000,p=new Float32Array(c*3);
+  for(let i=0;i<c;i++){p[i*3]=(Math.random()-.5)*100;p[i*3+1]=(Math.random()-.5)*100;p[i*3+2]=(Math.random()-.5)*100}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));
+  scene.add(new THREE.Points(g,new THREE.PointsMaterial({color:0x2d3148,size:0.06,transparent:true,opacity:0.5})));
 }
 
-// ── Interaction ──
+function buildUI() {
+  document.getElementById('hdrStats').innerHTML=`<div class="stat"><div class="stat-v">${BDATA.nodes.length}</div><div class="stat-l">Nodes</div></div><div class="stat"><div class="stat-v">${BDATA.edges.length}</div><div class="stat-l">Links</div></div><div class="stat"><div class="stat-v">${Object.keys(REGIONS).length}</div><div class="stat-l">Regions</div></div>`;
+  let h=`<button class="filter-btn active" data-region="all" onclick="filterRegion('all')">All</button>`;
+  Object.entries(REGIONS).forEach(([id,reg])=>{const c=BDATA.nodes.filter(n=>n.region===id).length;if(c>0)h+=`<button class="filter-btn" data-region="${id}" onclick="filterRegion('${id}')"><span class="filter-dot" style="background:${reg.hex}"></span>${reg.label}</button>`});
+  document.getElementById('filters').innerHTML=h;
+}
+
+function filterRegion(rid) {
+  activeFilter=rid==='all'?null:rid;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.toggle('active',b.dataset.region===rid));
+  nodeMeshes.forEach((m,i)=>{const v=!activeFilter||BDATA.nodes[i].region===activeFilter;m.userData.targetOpacity=v?.95:.05;m.userData.targetEmissive=v?.4:.02});
+  glowSprites.forEach((g,i)=>{g.material.opacity=(!activeFilter||BDATA.nodes[i].region===activeFilter)?.04:.002});
+  edges3D.forEach(e=>{const v=!activeFilter||BDATA.nodes[e.si].region===activeFilter||BDATA.nodes[e.ti].region===activeFilter;e.line.material.opacity=v?.04:.005});
+}
+
 function onMouseMove(e) {
-  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  mouse.x=(e.clientX/innerWidth)*2-1;mouse.y=-(e.clientY/innerHeight)*2+1;
+  raycaster.setFromCamera(mouse,camera);
+  const hits=raycaster.intersectObjects(nodeMeshes);
+  const tt=document.getElementById('tooltip');
+  if(hits.length>0){
+    const n=hits[0].object.userData.node,r=REGIONS[n.region]||{};
+    document.getElementById('tooltipName').textContent=n.id.split('/').pop();
+    document.getElementById('tooltipRegion').textContent=r.label||'';
+    tt.style.left=(e.clientX+14)+'px';tt.style.top=(e.clientY-10)+'px';
+    tt.classList.add('visible');document.body.style.cursor='pointer';hoveredNode=n.id;
+  }else{tt.classList.remove('visible');document.body.style.cursor='default';hoveredNode=null}
 }
 
-function onClick(e) {
-  raycaster.setFromCamera(mouse, camera);
-  const intersects = raycaster.intersectObjects(nodeMeshes);
-  if (intersects.length > 0) {
-    const node = intersects[0].object.userData.node;
-    selectNode(node);
-  } else {
-    closePanel();
-  }
+function onClick() {
+  raycaster.setFromCamera(mouse,camera);
+  const hits=raycaster.intersectObjects(nodeMeshes);
+  if(hits.length>0)selectNode(hits[0].object.userData.node);else closePanel();
 }
 
 function selectNode(node) {
-  selectedNode = node;
-  const region = REGIONS[node.region] || {};
-  const hex = '#' + (region.color || 0x818cf8).toString(16).padStart(6, '0');
-
-  // Find connections
-  const connected = new Set();
-  BDATA.edges.forEach(e => {
-    if (e.s === node.id) connected.add(e.t);
-    if (e.t === node.id) connected.add(e.s);
-  });
-
-  const connHtml = [...connected].slice(0, 20).map(cid => {
-    const label = cid.split('/').pop();
-    return `<span class="conn-tag">${label}</span>`;
+  selectedNode=node;
+  const region=REGIONS[node.region]||{},hex=region.hex||'#818cf8';
+  const connected=new Set();
+  BDATA.edges.forEach(e=>{if(e.s===node.id)connected.add(e.t);if(e.t===node.id)connected.add(e.s)});
+  const connHtml=[...connected].slice(0,24).map(cid=>{
+    const label=cid.split('/').pop();const cr=REGIONS[BDATA.nodes.find(n=>n.id===cid)?.region];
+    return`<span class="conn-tag" style="border-color:${cr?.hex||'#818cf8'}22;color:${cr?.hex||'#818cf8'}" onclick="selectNodeById('${cid}')">${label}</span>`;
   }).join('');
-
-  document.getElementById('panelContent').innerHTML = `
+  const recall=node.recall||0;
+  document.getElementById('panelContent').innerHTML=`
+    <div class="panel-icon">${region.emoji||'●'}</div>
     <div class="panel-title">${node.id.split('/').pop()}</div>
-    <div class="panel-kind">${node.kind} · ${node.region}</div>
-    <div style="margin-top:12px;font-size:11px;color:${hex}">${region.desc || ''}</div>
-    <div class="panel-section">
-      <div class="panel-label">Word Count</div>
-      <div class="panel-value">${node.wordCount || 0}</div>
+    <div class="panel-kind">${node.kind}</div>
+    <div class="panel-region" style="color:${hex}">${region.label||node.region}${region.desc?' — '+region.desc:''}</div>
+    <div class="panel-grid">
+      <div class="panel-metric"><div class="panel-metric-label">Words</div><div class="panel-metric-value">${node.wordCount||0}</div></div>
+      <div class="panel-metric"><div class="panel-metric-label">Connections</div><div class="panel-metric-value">${connected.size}</div></div>
     </div>
-    <div class="panel-section">
-      <div class="panel-label">Recall Score</div>
-      <div class="panel-value">${(node.recall || 0).toFixed(2)}</div>
+    <div style="margin-top:12px"><div class="panel-metric-label">Recall ${recall.toFixed(2)}</div>
+      <div style="width:100%;height:4px;border-radius:2px;background:rgba(255,255,255,.03);margin-top:6px;overflow:hidden"><div style="width:${recall*100}%;height:100%;background:linear-gradient(90deg,${hex},${hex}88);border-radius:2px"></div></div>
     </div>
-    <div class="panel-section">
-      <div class="panel-label">Connections (${connected.size})</div>
-      <div class="panel-connections">${connHtml || '<span style="color:#3d4258">None</span>'}</div>
-    </div>
-    ${node.dreamPromoted ? '<div class="panel-section"><div class="panel-label">Dream</div><div class="panel-value" style="color:#c084fc">🌙 Dream-promoted node</div></div>' : ''}
-    <div class="panel-section">
-      <div class="panel-label">Created</div>
-      <div class="panel-value">${node.created || '—'}</div>
-    </div>
-    <div class="panel-section">
-      <div class="panel-label">Modified</div>
-      <div class="panel-value">${node.modified || '—'}</div>
-    </div>
-  `;
-
+    ${node.dreamPromoted?'<div class="dream-badge">🌙 Dream-promoted</div>':''}
+    <div class="panel-section"><div class="panel-label">Connected Nodes</div><div class="panel-connections">${connHtml||'<span style="color:#2d3148;font-size:11px">No connections</span>'}</div></div>
+    <div class="panel-grid" style="margin-top:20px">
+      <div class="panel-metric"><div class="panel-metric-label">Created</div><div class="panel-metric-value" style="font-size:11px">${node.created||'—'}</div></div>
+      <div class="panel-metric"><div class="panel-metric-label">Modified</div><div class="panel-metric-value" style="font-size:11px">${node.modified||'—'}</div></div>
+    </div>`;
   document.getElementById('panel').classList.add('open');
-
-  // Highlight connected nodes
-  nodeMeshes.forEach((m, i) => {
-    const n = BDATA.nodes[i];
-    const isConnected = connected.has(n.id);
-    m.material.emissiveIntensity = (n.id === node.id || isConnected) ? 0.8 : 0.1;
-    m.material.opacity = (n.id === node.id || isConnected) ? 1.0 : 0.2;
-  });
-
-  edges3D.forEach(e => {
-    const isRelated = e.si === BDATA.nodes.indexOf(node) || e.ti === BDATA.nodes.indexOf(node);
-    e.line.material.opacity = isRelated ? 0.3 : 0.02;
-  });
+  nodeMeshes.forEach((m,i)=>{const n=BDATA.nodes[i];const sel=n.id===node.id;const cn=connected.has(n.id);m.userData.targetEmissive=(sel||cn)?1:.05;m.userData.targetOpacity=(sel||cn)?1:.08});
+  edges3D.forEach(e=>{const r=BDATA.nodes[e.si]?.id===node.id||BDATA.nodes[e.ti]?.id===node.id;e.line.material.opacity=r?.35:.01});
+  glowSprites.forEach((g,i)=>{const n=BDATA.nodes[i];const sel=n.id===node.id;const cn=connected.has(n.id);g.material.opacity=(sel||cn)?.12:.005});
 }
 
-function closePanel() {
-  document.getElementById('panel').classList.remove('open');
-  selectedNode = null;
-  // Reset opacity
-  nodeMeshes.forEach(m => { m.material.emissiveIntensity = 0.3; m.material.opacity = 0.9; });
-  edges3D.forEach(e => { e.line.material.opacity = 0.06; });
-}
+function selectNodeById(id){const n=BDATA.nodes.find(n=>n.id===id);if(n)selectNode(n)}
+function closePanel(){document.getElementById('panel').classList.remove('open');selectedNode=null;filterRegion(activeFilter||'all')}
+function onResize(){camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)}
 
-function onResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-// ── Animation ──
-let time = 0;
 function animate() {
   requestAnimationFrame(animate);
-  time += 0.01;
-  controls.update();
-
-  // Subtle node pulsing
-  nodeMeshes.forEach((m, i) => {
-    const pulse = 1 + Math.sin(time * 2 + i * 0.5) * 0.05;
-    m.scale.setScalar(pulse);
+  time+=0.008;controls.update();
+  nodeMeshes.forEach((m,i)=>{
+    m.material.emissiveIntensity+=(m.userData.targetEmissive-m.material.emissiveIntensity)*.08;
+    m.material.opacity+=(m.userData.targetOpacity-m.material.opacity)*.08;
+    m.scale.setScalar(1+Math.sin(time*2.5+i*.7)*.04);
   });
-
-  // Hover detection
-  raycaster.setFromCamera(mouse, camera);
-  const intersects = raycaster.intersectObjects(nodeMeshes);
-  if (intersects.length > 0) {
-    const node = intersects[0].object.userData.node;
-    if (hoveredNode !== node.id) {
-      hoveredNode = node.id;
-      document.body.style.cursor = 'pointer';
-    }
-  } else {
-    hoveredNode = null;
-    document.body.style.cursor = 'default';
+  if(particleSystem){
+    const pos=particleSystem.geometry.attributes.position;
+    for(let i=0;i<pos.count;i++)pos.array[i*3+1]+=Math.sin(time+i*.01)*.0003;
+    pos.needsUpdate=true;
+    particleSystem.rotation.y=time*0.02;
   }
-
-  renderer.render(scene, camera);
+  renderer.render(scene,camera);
 }
 
-// ── Utils ──
-function hashCode(s) { let h = 0; for (let i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; } return Math.abs(h); }
-function pseudoRandom(seed) { const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); }
-
-// ── Start ──
+function hashCode(s){let h=0;for(let i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h|=0}return Math.abs(h)}
+function pseudoRandom(seed){const x=Math.sin(seed*12.9898+78.233)*43758.5453;return x-Math.floor(x)}
 loadData();
 </script>
 </body>
