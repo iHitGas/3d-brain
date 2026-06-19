@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Brain Atlas</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#05050a;color:#e5e7eb;font-family:'Inter',system-ui,sans-serif;overflow:hidden;height:100vh}
+canvas{display:block}
+
+/* Header */
+.hdr{position:fixed;top:0;left:0;right:0;padding:14px 24px;z-index:10;pointer-events:none;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(180deg,rgba(5,5,10,.98) 0%,rgba(5,5,10,.5) 60%,transparent)}
+.hdr-l{display:flex;align-items:center;gap:12px}
+.logo{width:28px;height:28px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#a78bfa,#6366f1,#4f46e5);box-shadow:0 0 16px rgba(99,102,241,.4);display:flex;align-items:center;justify-content:center;font-size:14px}
+.title{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+.title b{color:#a78bfa}
+.hdr-stats{display:flex;gap:16px;align-items:center}
+.stat{font-family:'JetBrains Mono',monospace;text-align:right}
+.stat-v{font-size:16px;font-weight:700;background:linear-gradient(135deg,#818cf8,#c084fc);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.stat-l{font-size:7px;color:#2d3148;text-transform:uppercase;letter-spacing:.1em;margin-top:1px}
+
+/* Region legend */
+.legend{position:fixed;bottom:24px;left:24px;z-index:10;font-family:'JetBrains Mono',monospace;font-size:9px;pointer-events:none}
+.legend-row{display:flex;align-items:center;gap:8px;margin:4px 0;color:#3d4258}
+.legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+/* Info panel */
+.panel{position:fixed;right:-420px;top:0;bottom:0;width:400px;background:rgba(5,5,10,.98);border-left:1px solid rgba(99,102,241,.08);z-index:15;transition:right .4s cubic-bezier(.4,0,.2,1);backdrop-filter:blur(40px);padding:40px 28px 28px;overflow-y:auto}
+.panel.open{right:0}
+.panel-close{position:absolute;top:16px;right:16px;color:#3d4258;cursor:pointer;font-size:20px;font-family:'JetBrains Mono',monospace;transition:color .2s}
+.panel-close:hover{color:#818cf8}
+.panel-title{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;background:linear-gradient(135deg,#e5e7eb,#818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.panel-kind{font-family:'JetBrains Mono',monospace;font-size:9px;color:#3d4258;text-transform:uppercase;letter-spacing:.1em;margin-top:8px}
+.panel-section{margin-top:20px}
+.panel-label{font-family:'JetBrains Mono',monospace;font-size:8px;color:#2d3148;text-transform:uppercase;letter-spacing:.12em;margin-bottom:6px}
+.panel-value{font-family:'JetBrains Mono',monospace;font-size:12px;color:#9ca3af;line-height:1.6}
+.panel-connections{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.conn-tag{font-family:'JetBrains Mono',monospace;font-size:9px;padding:3px 8px;border-radius:6px;background:rgba(99,102,241,.06);color:#6366f1;border:1px solid rgba(99,102,241,.08)}
+
+/* Controls hint */
+.hint{position:fixed;bottom:24px;right:24px;z-index:10;font-family:'JetBrains Mono',monospace;font-size:8px;color:#1e2236;letter-spacing:.05em;text-align:right;pointer-events:none;line-height:1.8}
+
+/* Vignette */
+.vignette{position:fixed;inset:0;pointer-events:none;z-index:4;background:radial-gradient(ellipse at center,transparent 40%,rgba(5,5,10,.8) 100%)}
+
+/* Loading */
+.loader{position:fixed;inset:0;z-index:100;background:#05050a;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .6s,visibility .6s}
+.loader.done{opacity:0;visibility:hidden}
+.loader-text{font-family:'JetBrains Mono',monospace;font-size:10px;color:#2d3148;letter-spacing:.2em;text-transform:uppercase;margin-top:16px}
+</style>
+</head>
+<body>
+<div class="loader" id="loader"><div class="logo" style="width:40px;height:40px;font-size:20px">🧠</div><div class="loader-text">Loading Brain Atlas</div></div>
+<div class="vignette"></div>
+
+<div class="hdr">
+  <div class="hdr-l"><div class="logo">🧠</div><div class="title"><b>Claudia</b> 3D Brain Atlas</div></div>
+  <div class="hdr-stats" id="hdrStats"></div>
+</div>
+
+<div class="legend" id="legend"></div>
+<div class="panel" id="panel"><div class="panel-close" onclick="closePanel()">&times;</div><div id="panelContent"></div></div>
+<div class="hint">DRAG to rotate<br>SCROLL to zoom<br>CLICK node for info</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+// ── Brain Region Colors & Positions ──
+const REGIONS = {
+  prefrontal:  { color: 0x818cf8, label: 'Prefrontal',   pos: [0, 0.3, 1.2],    desc: 'Identity · Decisions · Concepts' },
+  thalamus:    { color: 0x38bdf8, label: 'Thalamus',     pos: [0, 0.0, 0.0],    desc: 'Routing · Relay · Templates' },
+  hippocampus: { color: 0x34d399, label: 'Hippocampus',  pos: [-0.8, -0.2, -0.5], desc: 'Memory · Indexing' },
+  motor:       { color: 0xf472b6, label: 'Motor Cortex', pos: [0, 0.8, 0.3],    desc: 'Action · Projects' },
+  occipital:   { color: 0xfbbf24, label: 'Occipital',   pos: [0, -0.1, -1.3],  desc: 'Visual · Reference Input' },
+  temporal:    { color: 0xfb923c, label: 'Temporal',     pos: [-1.2, 0, 0.3],   desc: 'Social · People' },
+  cerebellum:  { color: 0x2dd4bf, label: 'Cerebellum',  pos: [0.8, -0.5, -0.8], desc: 'Daily Routines' },
+  limbic:      { color: 0xc084fc, label: 'Limbic',      pos: [0, 0.4, -0.3],   desc: 'Emotions · Dreams' }
+};
+
+// ── Fetch brain data ──
+let BDATA = null;
+let nodes3D = [];
+let edges3D = [];
+
+async function loadData() {
+  try {
+    const r = await fetch('/api/data');
+    BDATA = await r.json();
+  } catch {
+    // Fallback inline data
+    BDATA = {nodes:[],edges:[]};
+  }
+  buildScene();
+}
+
+// ── Three.js Setup ──
+let scene, camera, renderer, controls;
+let raycaster, mouse;
+let brainGroup;
+let nodeMeshes = [];
+let hoveredNode = null;
+let selectedNode = null;
+
+function buildScene() {
+  scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x05050a, 0.06);
+
+  camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera.position.set(0, 2, 8);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
+  document.body.appendChild(renderer.domElement);
+
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+  controls.maxDistance = 20;
+  controls.minDistance = 2;
+  controls.autoRotate = true;
+  controls.autoRotateSpeed = 0.3;
+
+  raycaster = new THREE.Raycaster();
+  mouse = new THREE.Vector2(-999, -999);
+
+  // Lighting
+  const ambLight = new THREE.AmbientLight(0x404060, 0.5);
+  scene.add(ambLight);
+  const dirLight = new THREE.DirectionalLight(0x818cf8, 0.8);
+  dirLight.position.set(5, 10, 5);
+  scene.add(dirLight);
+  const pointLight = new THREE.PointLight(0xc084fc, 0.6, 20);
+  pointLight.position.set(-3, 3, 3);
+  scene.add(pointLight);
+  const pointLight2 = new THREE.PointLight(0x818cf8, 0.4, 20);
+  pointLight2.position.set(3, -2, -3);
+  scene.add(pointLight2);
+
+  brainGroup = new THREE.Group();
+  scene.add(brainGroup);
+
+  // Build brain regions and nodes
+  buildBrain();
+  buildEdges();
+  buildBackground();
+
+  // Stats
+  const hdrStats = document.getElementById('hdrStats');
+  hdrStats.innerHTML = `
+    <div class="stat"><div class="stat-v">${BDATA.nodes.length}</div><div class="stat-l">Nodes</div></div>
+    <div class="stat"><div class="stat-v">${BDATA.edges.length}</div><div class="stat-l">Links</div></div>
+  `;
+
+  // Legend
+  buildLegend();
+
+  // Hide loader
+  setTimeout(() => document.getElementById('loader').classList.add('done'), 500);
+
+  // Events
+  window.addEventListener('resize', onResize);
+  window.addEventListener('mousemove', onMouseMove);
+  window.addEventListener('click', onClick);
+
+  animate();
+}
+
+function buildBrain() {
+  // Create transparent brain shell (two hemispheres)
+  const shellGeo = new THREE.SphereGeometry(3.2, 64, 64, 0, Math.PI * 2, 0, Math.PI * 0.85);
+  const shellMat = new THREE.MeshPhongMaterial({
+    color: 0x1a1a2e, transparent: true, opacity: 0.04,
+    wireframe: true, wireframeLinewidth: 0.5
+  });
+  const shell = new THREE.Mesh(shellGeo, shellMat);
+  brainGroup.add(shell);
+
+  // Inner glow
+  const glowGeo = new THREE.SphereGeometry(2.8, 32, 32);
+  const glowMat = new THREE.MeshBasicMaterial({ color: 0x6366f1, transparent: true, opacity: 0.015 });
+  const glow = new THREE.Mesh(glowGeo, glowMat);
+  brainGroup.add(glow);
+
+  // Region center markers (subtle glowing spheres)
+  Object.entries(REGIONS).forEach(([id, reg]) => {
+    const [x, y, z] = reg.pos;
+    // Region anchor - subtle glow
+    const rGeo = new THREE.SphereGeometry(0.15, 16, 16);
+    const rMat = new THREE.MeshBasicMaterial({ color: reg.color, transparent: true, opacity: 0.15 });
+    const rMesh = new THREE.Mesh(rGeo, rMat);
+    rMesh.position.set(x * 2, y * 2.5, z * 2);
+    brainGroup.add(rMesh);
+  });
+
+  // Place nodes
+  BDATA.nodes.forEach((node, i) => {
+    const region = REGIONS[node.region] || REGIONS.thalamus;
+    const [rx, ry, rz] = region.pos;
+    const color = region.color;
+
+    // Spread nodes within region using deterministic random
+    const seed = hashCode(node.id);
+    const spread = 0.8;
+    const nx = rx * 2 + (pseudoRandom(seed) - 0.5) * spread * 2;
+    const ny = ry * 2.5 + (pseudoRandom(seed + 1) - 0.5) * spread * 1.5;
+    const nz = rz * 2 + (pseudoRandom(seed + 2) - 0.5) * spread * 2;
+
+    // Clamp to brain sphere
+    const maxR = 2.9;
+    const len = Math.sqrt(nx*nx + ny*ny + nz*nz);
+    const scale = len > maxR ? maxR / len : 1;
+    const fx = nx * scale, fy = ny * scale, fz = nz * scale;
+
+    // Node sphere
+    const size = node.kind === 'meta' ? 0.12 : node.kind === 'project' ? 0.08 : 0.1;
+    const geo = new THREE.SphereGeometry(size, 16, 16);
+    const mat = new THREE.MeshPhongMaterial({
+      color: color,
+      emissive: color,
+      emissiveIntensity: 0.3,
+      transparent: true,
+      opacity: 0.9
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(fx, fy, fz);
+    mesh.userData = { node, index: i };
+    brainGroup.add(mesh);
+    nodeMeshes.push(mesh);
+
+    // Glow ring
+    const ringGeo = new THREE.RingGeometry(size + 0.02, size + 0.04, 32);
+    const ringMat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.2, side: THREE.DoubleSide });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.position.copy(mesh.position);
+    ring.lookAt(camera.position);
+    ring.userData = { isRing: true };
+    brainGroup.add(ring);
+
+    nodes3D.push({ node, mesh, ring, pos: [fx, fy, fz] });
+  });
+}
+
+function buildEdges() {
+  const nodeMap = {};
+  nodes3D.forEach((n, i) => { nodeMap[n.node.id] = i; });
+
+  BDATA.edges.forEach(edge => {
+    const si = nodeMap[edge.s];
+    const ti = nodeMap[edge.t];
+    if (si === undefined || ti === undefined) return;
+
+    const s = nodes3D[si].pos;
+    const t = nodes3D[ti].pos;
+    const sColor = REGIONS[BDATA.nodes[si].region]?.color || 0x818cf8;
+    const tColor = REGIONS[BDATA.nodes[ti].region]?.color || 0x818cf8;
+
+    // Curved line between nodes
+    const mid = [(s[0]+t[0])/2, (s[1]+t[1])/2 + 0.15, (s[2]+t[2])/2];
+    const curve = new THREE.QuadraticBezierCurve3(
+      new THREE.Vector3(...s),
+      new THREE.Vector3(mid[0], mid[1], mid[2]),
+      new THREE.Vector3(...t)
+    );
+    const points = curve.getPoints(20);
+    const geo = new THREE.BufferGeometry().setFromPoints(points);
+    const mat = new THREE.LineBasicMaterial({ color: sColor, transparent: true, opacity: 0.06 });
+    const line = new THREE.Line(geo, mat);
+    brainGroup.add(line);
+    edges3D.push({ line, si, ti });
+  });
+}
+
+function buildBackground() {
+  // Starfield
+  const starsGeo = new THREE.BufferGeometry();
+  const starPositions = [];
+  for (let i = 0; i < 2000; i++) {
+    starPositions.push(
+      (Math.random() - 0.5) * 80,
+      (Math.random() - 0.5) * 80,
+      (Math.random() - 0.5) * 80
+    );
+  }
+  starsGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+  const starsMat = new THREE.PointsMaterial({ color: 0x3d4258, size: 0.05, transparent: true, opacity: 0.6 });
+  const stars = new THREE.Points(starsGeo, starsMat);
+  scene.add(stars);
+}
+
+function buildLegend() {
+  const el = document.getElementById('legend');
+  let html = '';
+  Object.entries(REGIONS).forEach(([id, reg]) => {
+    const count = BDATA.nodes.filter(n => n.region === id).length;
+    if (count > 0) {
+      const hex = '#' + reg.color.toString(16).padStart(6, '0');
+      html += `<div class="legend-row"><div class="legend-dot" style="background:${hex}"></div>${reg.label} (${count})</div>`;
+    }
+  });
+  el.innerHTML = html;
+}
+
+// ── Interaction ──
+function onMouseMove(e) {
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+}
+
+function onClick(e) {
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObjects(nodeMeshes);
+  if (intersects.length > 0) {
+    const node = intersects[0].object.userData.node;
+    selectNode(node);
+  } else {
+    closePanel();
+  }
+}
+
+function selectNode(node) {
+  selectedNode = node;
+  const region = REGIONS[node.region] || {};
+  const hex = '#' + (region.color || 0x818cf8).toString(16).padStart(6, '0');
+
+  // Find connections
+  const connected = new Set();
+  BDATA.edges.forEach(e => {
+    if (e.s === node.id) connected.add(e.t);
+    if (e.t === node.id) connected.add(e.s);
+  });
+
+  const connHtml = [...connected].slice(0, 20).map(cid => {
+    const label = cid.split('/').pop();
+    return `<span class="conn-tag">${label}</span>`;
+  }).join('');
+
+  document.getElementById('panelContent').innerHTML = `
+    <div class="panel-title">${node.id.split('/').pop()}</div>
+    <div class="panel-kind">${node.kind} · ${node.region}</div>
+    <div style="margin-top:12px;font-size:11px;color:${hex}">${region.desc || ''}</div>
+    <div class="panel-section">
+      <div class="panel-label">Word Count</div>
+      <div class="panel-value">${node.wordCount || 0}</div>
+    </div>
+    <div class="panel-section">
+      <div class="panel-label">Recall Score</div>
+      <div class="panel-value">${(node.recall || 0).toFixed(2)}</div>
+    </div>
+    <div class="panel-section">
+      <div class="panel-label">Connections (${connected.size})</div>
+      <div class="panel-connections">${connHtml || '<span style="color:#3d4258">None</span>'}</div>
+    </div>
+    ${node.dreamPromoted ? '<div class="panel-section"><div class="panel-label">Dream</div><div class="panel-value" style="color:#c084fc">🌙 Dream-promoted node</div></div>' : ''}
+    <div class="panel-section">
+      <div class="panel-label">Created</div>
+      <div class="panel-value">${node.created || '—'}</div>
+    </div>
+    <div class="panel-section">
+      <div class="panel-label">Modified</div>
+      <div class="panel-value">${node.modified || '—'}</div>
+    </div>
+  `;
+
+  document.getElementById('panel').classList.add('open');
+
+  // Highlight connected nodes
+  nodeMeshes.forEach((m, i) => {
+    const n = BDATA.nodes[i];
+    const isConnected = connected.has(n.id);
+    m.material.emissiveIntensity = (n.id === node.id || isConnected) ? 0.8 : 0.1;
+    m.material.opacity = (n.id === node.id || isConnected) ? 1.0 : 0.2;
+  });
+
+  edges3D.forEach(e => {
+    const isRelated = e.si === BDATA.nodes.indexOf(node) || e.ti === BDATA.nodes.indexOf(node);
+    e.line.material.opacity = isRelated ? 0.3 : 0.02;
+  });
+}
+
+function closePanel() {
+  document.getElementById('panel').classList.remove('open');
+  selectedNode = null;
+  // Reset opacity
+  nodeMeshes.forEach(m => { m.material.emissiveIntensity = 0.3; m.material.opacity = 0.9; });
+  edges3D.forEach(e => { e.line.material.opacity = 0.06; });
+}
+
+function onResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+// ── Animation ──
+let time = 0;
+function animate() {
+  requestAnimationFrame(animate);
+  time += 0.01;
+  controls.update();
+
+  // Subtle node pulsing
+  nodeMeshes.forEach((m, i) => {
+    const pulse = 1 + Math.sin(time * 2 + i * 0.5) * 0.05;
+    m.scale.setScalar(pulse);
+  });
+
+  // Hover detection
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObjects(nodeMeshes);
+  if (intersects.length > 0) {
+    const node = intersects[0].object.userData.node;
+    if (hoveredNode !== node.id) {
+      hoveredNode = node.id;
+      document.body.style.cursor = 'pointer';
+    }
+  } else {
+    hoveredNode = null;
+    document.body.style.cursor = 'default';
+  }
+
+  renderer.render(scene, camera);
+}
+
+// ── Utils ──
+function hashCode(s) { let h = 0; for (let i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; } return Math.abs(h); }
+function pseudoRandom(seed) { const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); }
+
+// ── Start ──
+loadData();
+</script>
+</body>
+</html>
